@@ -1,0 +1,87 @@
+import scrapy
+import time
+from twilio.rest import Client
+from scrapy.http import Request
+from webdriver_manager.firefox import GeckoDriverManager
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options
+
+#in order to run this program go to pycharm terminal and install Scrapy, Twilio, Silenium (can all be done through terminal) create a project folder and navigate to it via cd, when in the folder type Scrapy Crawl Bestbuy
+
+client = Client("auth token", "enter pass here") #add twilio information here if you want to get text alerts, twilio.com free trial
+
+
+class BestbuySpider(scrapy.Spider):
+   name = "bestbuy"
+   USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/43.0.2357.130 Safari/537.36"
+
+   def __init__(self, *args, **kwargs):
+       options = Options()
+       options.headless = True #you can set this to false if you want to see the browser on your screen otherwise it will run in background (aka headless mode)
+       self.profile = webdriver.FirefoxProfile(r'C:\Users\Joseph\AppData\Roaming\Mozilla\Firefox\Profiles\rye9jf9f.default-release') #add your file path for firefox
+       self.driver = webdriver.Firefox(self.profile, options=options, executable_path=GeckoDriverManager().install())
+       self.wait = WebDriverWait(self.driver, 15)
+       self.products = []
+       self.start_urls = ["https://www.google.com/", ]
+
+   def parse(self, response, *args, **kwargs):
+       url = 'https://www.bestbuy.com/site/searchpage.jsp?_dyncharset=UTF-8&id=pcat17071&iht=y&keys=keys&ks=960&list=n&qp=category_facet%3DGPUs%20%2F%20Video%20Graphics%20Cards~abcat0507002&sc=Global&st=3080&type=page&usc=All%20Categories'
+       self.driver.get(url)
+       time.sleep(2)
+       # Finding Product Availability.
+       try:
+           self.products = []
+           self.products = self.driver.find_element_by_xpath("//*[@class='btn btn-primary btn-sm btn-block btn-leading-ficon add-to-cart-button']").text.strip()
+           print("\nProduct is Available.\n")
+           if len(self.products):
+               for product in self.products:
+                   print("\nFound 1 item to add to cart.\n")
+                   self.wait.until(EC.presence_of_element_located((By.XPATH, "//*[@class='btn btn-primary btn-sm btn-block btn-leading-ficon add-to-cart-button']")))
+                   # Clicking Add To Cart
+                   self.driver.find_element_by_xpath("//*[@class='btn btn-primary btn-sm btn-block btn-leading-ficon add-to-cart-button']").click()
+                   self.wait.until(EC.element_to_be_clickable((By.XPATH, "//*[@class='btn btn-secondary btn-sm btn-block ']")))
+                   break
+       except (NoSuchElementException, AttributeError, TimeoutException) as error:
+           if error:
+               print("Product Sold Out: Retrying in 6 Seconds.")
+               time.sleep(6)
+               yield Request(url, callback=self.parse, dont_filter=True)
+
+       if len(self.products):
+           # Going To Cart.
+           print("\nGoing To Cart.\n")
+           self.driver.get("https://www.bestbuy.com/cart")
+           time.sleep(3)
+
+           # Clicking Checkout
+           print("\nClicking Checkout.\n")
+           self.wait.until(EC.presence_of_element_located((By.XPATH, "//*[@class='btn btn-lg btn-block btn-primary']")))
+           self.driver.find_element_by_xpath("//*[@class='btn btn-lg btn-block btn-primary']").click()
+
+           # Finalizing Checkout
+           print("\nFinalizing Checkout.\n")
+           self.wait.until(EC.presence_of_element_located((By.XPATH, "//*[@class='btn btn-lg btn-block btn-primary button__fast-track']")))
+           # time.sleep(2)
+
+           # Trying CVV
+           try:
+               print("\nTrying CVV Number.\n")
+               security_code = self.driver.find_element_by_id("credit-card-cvv")
+               time.sleep(1)
+               security_code.send_keys("123")  # You can enter your CVV number here.
+           except NoSuchElementException:
+               pass
+
+           # ARE YOU READY TO BUY?
+           self.driver.find_element_by_xpath("//*[@class='btn btn-lg btn-block btn-primary button__fast-track']").click()
+           print("\nBot has Completed Checkout.\n")
+           time.sleep(5)
+
+           # Want to Receive Text Messages?
+           client.messages.create(to="+1yourphonenumber", from_="+1twiliophonenumber", body="Bot has finally made a purchase homie!")
+
