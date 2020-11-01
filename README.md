@@ -6,4 +6,6 @@ This is a python script that uses Selenium web driver, Scrapy and Twilio to scow
 remember to sign in on firefox and enable it to remember your information on both newegg and bestbuy
 you can change the URL on the script to fit whatever product or category you want, the bot is set to purchase the first available product on page though
 
+also save your credit card and billing information on each account
+
 When saving these python files make sure they are saved in the "spiders" portion of the folder
